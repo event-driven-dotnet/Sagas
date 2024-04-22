@@ -353,7 +353,7 @@ public abstract class Saga
     /// <returns>A task that represents the asynchronous operation.</returns>
     protected virtual async Task TransitionSagaStateAsync(bool commandSuccessful)
     {
-        using (await _syncRoot.LockAsync())
+        using (await _syncRoot.ConditionalLockAsync(CurrentStep == 1))
         {
             var reverseOnFailure = GetCurrentAction().ReverseOnFailure;
             switch (State)
