@@ -1,14 +1,14 @@
+using AsyncKeyedLock;
 using EventDriven.DDD.Abstractions.Repositories;
 using InventoryService.Domain.InventoryAggregate;
 using MongoDB.Driver;
-using NeoSmart.AsyncLock;
 using URF.Core.Mongo;
 
 namespace InventoryService.Repositories;
 
 public class InventoryRepository : DocumentRepository<Inventory>, IInventoryRepository
 {
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     public InventoryRepository(
         IMongoCollection<Inventory> collection) : base(collection)

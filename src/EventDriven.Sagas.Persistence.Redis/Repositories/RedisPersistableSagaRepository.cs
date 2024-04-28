@@ -1,10 +1,10 @@
-using System.Text.Json;
+using AsyncKeyedLock;
 using AutoMapper;
 using EventDriven.Sagas.Persistence.Abstractions;
 using EventDriven.Sagas.Persistence.Abstractions.DTO;
 using EventDriven.Sagas.Persistence.Abstractions.Repositories;
 using Microsoft.Extensions.Caching.Distributed;
-using NeoSmart.AsyncLock;
+using System.Text.Json;
 
 namespace EventDriven.Sagas.Persistence.Redis.Repositories;
 
@@ -14,7 +14,7 @@ namespace EventDriven.Sagas.Persistence.Redis.Repositories;
 public class RedisPersistableSagaRepository<TSaga> : IPersistableSagaRepository<TSaga>
     where TSaga : PersistableSaga
 {
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     /// <summary>
     /// Distributed cache.
@@ -114,7 +114,7 @@ public class RedisPersistableSagaRepository<TSaga, TMetaData> :
     where TSaga : PersistableSaga<TMetaData>
     where TMetaData : class
 {
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     /// <inheritdoc />
     public RedisPersistableSagaRepository(IDistributedCache cache,

@@ -1,10 +1,10 @@
-﻿using EventDriven.DDD.Abstractions.Entities;
+﻿using AsyncKeyedLock;
+using EventDriven.DDD.Abstractions.Entities;
 using EventDriven.Sagas.Abstractions.Commands;
 using EventDriven.Sagas.Abstractions.Dispatchers;
 using EventDriven.Sagas.Abstractions.Evaluators;
 using EventDriven.Sagas.Abstractions.Handlers;
 using EventDriven.Sagas.Abstractions.Pools;
-using NeoSmart.AsyncLock;
 
 namespace EventDriven.Sagas.Abstractions;
 
@@ -13,7 +13,7 @@ namespace EventDriven.Sagas.Abstractions;
 /// </summary>
 public abstract class Saga
 {
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     /// <summary>
     /// Constructor.
@@ -346,6 +346,8 @@ public abstract class Saga
             ? "Duration exceeded timeout."
             : $"Duration of '{duration.Value:c}' exceeded timeout of '{timeout.Value:c}'";
 
+    private readonly AsyncLocal<int> _recursionCount = new();
+
     /// <summary>
     /// Transition saga state.
     /// </summary>
@@ -353,61 +355,68 @@ public abstract class Saga
     /// <returns>A task that represents the asynchronous operation.</returns>
     protected virtual async Task TransitionSagaStateAsync(bool commandSuccessful)
     {
-        using (await _syncRoot.LockAsync())
+        try
         {
-            var reverseOnFailure = GetCurrentAction().ReverseOnFailure;
-            switch (State)
+            using (await _syncRoot.ConditionalLockAsync(++_recursionCount.Value == 1))
             {
-                case SagaState.Executing:
-                    if (CurrentStep < Steps.Max(s => s.Sequence))
-                    {
-                        if (commandSuccessful)
+                var reverseOnFailure = GetCurrentAction().ReverseOnFailure;
+                switch (State)
+                {
+                    case SagaState.Executing:
+                        if (CurrentStep < Steps.Max(s => s.Sequence))
                         {
-                            CurrentStep++;
-                            await SagaPool.ReplaceSagaAsync(this);
-                            await ExecuteCurrentActionAsync();
+                            if (commandSuccessful)
+                            {
+                                CurrentStep++;
+                                await SagaPool.ReplaceSagaAsync(this);
+                                await ExecuteCurrentActionAsync();
+                            }
+                            else
+                            {
+                                if (!reverseOnFailure) CurrentStep--;
+                                State = SagaState.Compensating;
+                                await SagaPool.ReplaceSagaAsync(this);
+                                await ExecuteCurrentCompensatingActionAsync();
+                            }
                         }
                         else
                         {
-                            if (!reverseOnFailure) CurrentStep--;
-                            State = SagaState.Compensating;
-                            await SagaPool.ReplaceSagaAsync(this);
-                            await ExecuteCurrentCompensatingActionAsync();
+                            State = commandSuccessful ? SagaState.Executed : SagaState.Compensating;
+                            if (!commandSuccessful)
+                            {
+                                if (!reverseOnFailure) CurrentStep--;
+                                await SagaPool.ReplaceSagaAsync(this);
+                                await ExecuteCurrentCompensatingActionAsync();
+                            }
+                            else
+                            {
+                                await SagaPool.RemoveSagaAsync(Id);
+                            }
                         }
-                    }
-                    else
-                    {
-                        State = commandSuccessful ? SagaState.Executed : SagaState.Compensating;
-                        if (!commandSuccessful)
+                        return;
+                    case SagaState.Compensating:
+                        if (!commandSuccessful) // Exit if compensating action unsuccessful
+                            return;
+                        if (CurrentStep > Steps.Min(s => s.Sequence))
                         {
-                            if (!reverseOnFailure) CurrentStep--;
+                            CurrentStep--;
                             await SagaPool.ReplaceSagaAsync(this);
                             await ExecuteCurrentCompensatingActionAsync();
                         }
                         else
                         {
+                            State = SagaState.Compensated;
                             await SagaPool.RemoveSagaAsync(Id);
                         }
-                    }
-                    return;
-                case SagaState.Compensating:
-                    if (!commandSuccessful) // Exit if compensating action unsuccessful
                         return;
-                    if (CurrentStep > Steps.Min(s => s.Sequence))
-                    {
-                        CurrentStep--;
-                        await SagaPool.ReplaceSagaAsync(this);
-                        await ExecuteCurrentCompensatingActionAsync();
-                    }
-                    else
-                    {
-                        State = SagaState.Compensated;
-                        await SagaPool.RemoveSagaAsync(Id);
-                    }
-                    return;
-                default:
-                    return;
+                    default:
+                        return;
+                }
             }
+        }
+        finally
+        {
+            --_recursionCount.Value;
         }
     }
 

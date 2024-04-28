@@ -1,10 +1,10 @@
-using System.Text.Json;
+using AsyncKeyedLock;
 using AutoMapper;
 using EventDriven.Sagas.Persistence.Abstractions;
 using EventDriven.Sagas.Persistence.Abstractions.DTO;
 using EventDriven.Sagas.Persistence.Abstractions.Repositories;
 using MongoDB.Driver;
-using NeoSmart.AsyncLock;
+using System.Text.Json;
 using URF.Core.Mongo;
 
 namespace EventDriven.Sagas.Persistence.Mongo.Repositories;
@@ -17,7 +17,7 @@ public class PersistableSagaRepository<TSaga> :
     where TSaga : PersistableSaga
 {
     private readonly IMapper _mapper;
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     /// <summary>
     /// PersistableSagaRepository constructor.
@@ -92,7 +92,7 @@ public class PersistableSagaRepository<TSaga, TMetaData> :
     where TMetaData : class
 {
     private readonly IMapper _mapper;
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     /// <summary>
     /// PersistableSagaRepository constructor.

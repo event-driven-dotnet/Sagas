@@ -1,14 +1,14 @@
+using AsyncKeyedLock;
 using CustomerService.Domain.CustomerAggregate;
 using EventDriven.DDD.Abstractions.Repositories;
 using MongoDB.Driver;
-using NeoSmart.AsyncLock;
 using URF.Core.Mongo;
 
 namespace CustomerService.Repositories;
 
 public class CustomerRepository : DocumentRepository<Customer>, ICustomerRepository
 {
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     public CustomerRepository(
         IMongoCollection<Customer> collection) : base(collection)

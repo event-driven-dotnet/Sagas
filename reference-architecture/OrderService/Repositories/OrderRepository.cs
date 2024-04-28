@@ -1,6 +1,6 @@
-﻿using EventDriven.DDD.Abstractions.Repositories;
+﻿using AsyncKeyedLock;
+using EventDriven.DDD.Abstractions.Repositories;
 using MongoDB.Driver;
-using NeoSmart.AsyncLock;
 using OrderService.Domain.OrderAggregate;
 using URF.Core.Mongo;
 
@@ -8,7 +8,7 @@ namespace OrderService.Repositories;
 
 public class OrderRepository : DocumentRepository<Order>, IOrderRepository
 {
-    private readonly AsyncLock _syncRoot = new();
+    private readonly AsyncNonKeyedLocker _syncRoot = new();
 
     public OrderRepository(
         IMongoCollection<Order> collection) : base(collection)
